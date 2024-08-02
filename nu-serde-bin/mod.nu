@@ -16,12 +16,7 @@ def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: r
 }
 
 def "serialize int" [size: int]: [ int -> binary ] {
-    if $size mod 8 != 0 {
-        error make --unspanned { msg: "ser int: invalid size" }
-    }
-    let nb_bytes = $size / 8
-
-    $in | into binary --compact | bytes add --end (0x[00] | repeat $nb_bytes | bytes build ...$in) | bytes at ..<$nb_bytes
+    $in | into binary --compact | bytes add --end (0x[00] | repeat $size | bytes build ...$in) | bytes at ..<$size
 }
 
 def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int, err: record> ] {
@@ -52,21 +47,25 @@ def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: in
     }
 }
 
-def "serialize vec" [size: int]: [ list<binary> -> binary ] {
-    if $size mod 8 != 0 {
-        error make --unspanned { msg: "ser vec: invalid size" }
-    }
-    let nb_bytes_per_element = $size / 8
-
+def "serialize vec" [size: int]: [ list<binary> -> record<ser: binary, err: record> ] {
     for el in $in {
-        if ($el | bytes length) != $nb_bytes_per_element {
-            error make --unspanned { msg: "ser vec: invalid binary" }
+        if ($el | bytes length) != $size {
+            return {
+                ser: null,
+                err: {
+                    msg: $"(ansi red_bold)ser_vec::invalid_binary(ansi reset)",
+                    help: $"aie",
+                },
+            }
         }
     }
 
-    let nb_elements = $in | length | serialize int 64
+    let nb_elements = $in | length | serialize int 8
 
-    $in | prepend $nb_elements | bytes build ...$in
+    {
+        ser: ($in | prepend $nb_elements | bytes build ...$in),
+        err: {},
+    }
 }
 
 export def "deserialize" [schema]: [ binary -> any ] {
@@ -219,62 +218,125 @@ export def "deserialize" [schema]: [ binary -> any ] {
 }
 
 export def "serialize" [schema]: [ any -> binary ] {
-    let data = $in
+    def aux [schema]: [ any -> record<ser: binary, err: record> ] {
+        let data = $in
 
-    match ($schema | describe | str replace --regex '<.*' '') {
-        "string" => {
-            let s = $schema | parse "{type}:{size}" | into record
-            if $s == {} {
-                error make {
-                    msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                    label: {
-                        text: "schema is malformed",
-                        span: (metadata $schema).span,
-                    },
-                    help: $"expected format to be (ansi cyan){type}:{size}(ansi reset), found (ansi yellow)($schema)(ansi reset)"
+        match ($schema | describe | str replace --regex '<.*' '') {
+            "string" => {
+                let s = $schema | parse "{type}:{size}" | into record
+                if $s == {} {
+                    return {
+                        ser: null,
+                        err: {
+                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            label: {
+                                text: "schema is malformed",
+                                span: (metadata $schema).span,
+                            },
+                            help: $"expected format to be (ansi cyan){type}:{size}(ansi reset), found (ansi yellow)($schema)(ansi reset)"
+                        },
+                    }
                 }
-            }
 
-            let s = try {
-                $s | into int size
-            } catch {
-                error make {
-                    msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                    label: {
-                        text: "schema is malformed",
-                        span: (metadata $schema).span,
-                    },
-                    help: $"expected (ansi cyan)size(ansi reset) in format (ansi cyan){type}:{size}(ansi reset) to be an (ansi purple)int(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                let s = try {
+                    $s | into int size
+                } catch {
+                    return {
+                        ser: null,
+                        err: {
+                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            label: {
+                                text: "schema is malformed",
+                                span: (metadata $schema).span,
+                            },
+                            help: $"expected (ansi cyan)size(ansi reset) in format (ansi cyan){type}:{size}(ansi reset) to be an (ansi purple)int(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                        },
+                    }
                 }
-            }
 
-            match $s.type {
-                "vec" => { return ($data | serialize vec $s.size) },
-                "int" => { return ($data | serialize int $s.size) },
-                $t => {
-                    error make {
+                if $s.size mod 8 != 0 {
+                    return {
+                        ser: null,
+                        err: {
+                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            label: {
+                                text: "schema is malformed",
+                                span: (metadata $schema).span,
+                            },
+                            help: $"expected (ansi cyan)size(ansi reset) to be a multiple of (ansi purple)8(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                        },
+                    }
+                }
+                let s = $s | update size { $in / 8 }
+
+                match $s.type {
+                    "vec" => {
+                        let res = $data | serialize vec $s.size
+                        if $res.err != {} {
+                            return (
+                                $res | insert err.label {
+                                    text: $"woopsie",
+                                    span: (metadata $schema).span,
+                                }
+                            )
+                        }
+                        return $res
+                    },
+                    "int" => { return { ser: ($data | serialize int $s.size), err: {} } },
+                    $t => {
+                        return {
+                            ser: null,
+                            err: {
+                                msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                                label: {
+                                    text: "invalid schema type",
+                                    span: (metadata $schema).span,
+                                },
+                                help: $"expected one of (ansi cyan)['vec', 'int'](ansi reset), found (ansi yellow)($t)(ansi reset)"
+                            },
+                        }
+                    },
+                }
+            },
+            "record" => {
+                {
+                    ser: ($schema | items { |k, v|
+                        let res = $data | get $k | aux $v
+                        if $res.err != {} {
+                            return $res
+                        }
+                        $res.ser
+                    } | bytes build ...$in
+                    ),
+                    err: {},
+                }
+            },
+            $t => {
+                return {
+                    ser: null,
+                    err: {
                         msg: $"(ansi red_bold)invalid_schema(ansi reset)",
                         label: {
-                            text: "invalid schema type",
+                            text: "invalid serde schema",
                             span: (metadata $schema).span,
                         },
-                        help: $"expected one of (ansi cyan)['vec', 'int'](ansi reset), found (ansi yellow)($t)(ansi reset)"
-                    }
-                },
-            }
-        },
-        "record" => {
-            $schema | items { |k, v| $data | get $k | serialize $v } | bytes build ...$in
-        },
-        $t => {
-            error make {
-                msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                label: {
-                    text: "invalid serde schema",
-                    span: (metadata $schema).span,
-                },
-                help: $"type is (ansi purple)($t)(ansi reset)"
+                        help: $"type is (ansi purple)($t)(ansi reset), expected one of (ansi cyan)['string', 'record'](ansi reset)"
+                    },
+                }
             }
         }
     }
+
+    let res = $in | aux $schema
+    if $res.err != {} {
+        # NOTE: sometimes the span is just messed up...
+        let err = if ($res.err.label.span | view span $in.start $in.end | $in == '$schema') {
+            $res.err | update label.span (metadata $schema).span
+        } else {
+            $res.err
+        }
+
+        error make $err
+    }
+    $res.ser
 }
