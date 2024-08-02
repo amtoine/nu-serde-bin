@@ -27,7 +27,7 @@ def "serialize int" [size: int]: [ int -> binary ] {
 def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int, err: record> ] {
     let res = $in | bytes at ..<8 | deserialize int 8
     if $res.err != {} {
-        return { deser: null, n: null, err: $res.err }
+        return $res
     }
     let nb_elements = $res.deser
     let elements = $in | bytes at 8..
@@ -207,9 +207,12 @@ export def "deserialize" [schema]: [ binary -> any ] {
     }
 
     let res = $in | aux $schema 0
-    let span = (metadata $in).span
+    let input_span = (metadata $in).span
     if $res.err != {} {
+        # NOTE: when the call is not recursive, i.e. n == 0, it appears the span is not correct and
+        # needs to be corrected
         let err = if $res.n == 0 {
+            # NOTE: the span might already be defined, don't force it
             if $res.err.label.span? != null {
                 $res.err | update label.span (metadata $schema).span
             } else {
@@ -219,8 +222,9 @@ export def "deserialize" [schema]: [ binary -> any ] {
             $res.err
         }
 
+        # NOTE: if there is no span, the best is to point at the input data
         if $err.label.span? == null {
-            error make ($err | insert label.span $span)
+            error make ($err | insert label.span $input_span)
         } else {
             error make $err
         }
