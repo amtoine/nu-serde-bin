@@ -100,7 +100,21 @@ assert equal ($bin | deserialize $SCHEMA) $value
 assert equal ($value | serialize $SCHEMA) $bin
 ```
 
+### Rust libraries
+Below is a non-exhaustive list of Rust libraries that should be supported by `nu-serde-bin`:
+- the [`bincode`] crate
+- the [`serde::Serialize`] and [`serde::Deserialize`] traits from the [Serde framework][Serde]
+- the [`ark_serialize::CanonicalSerialize`] and [`ark_serialize::CanonicalDeserialize`] traits from the [Arkworks ecosystem][Arkworks]
+
 
 ## TODO
 - [ ] polish serialization error messages
 - [ ] add documentation
+
+[`bincode`]: https://docs.rs/bincode/latest/bincode/
+[`serde::Serialize`]: https://docs.rs/serde/1.0.204/serde/trait.Serialize.html
+[`serde::Deserialize`]: https://docs.rs/serde/1.0.204/serde/trait.Deserialize.html
+[Serde]: https://serde.rs/
+[`ark_serialize::CanonicalSerialize`]: https://docs.rs/ark-serialize/latest/ark_serialize/trait.CanonicalSerialize.html
+[`ark_serialize::CanonicalDeserialize`]: https://docs.rs/ark-serialize/latest/ark_serialize/trait.CanonicalDeserialize.html
+[Arkworks]: https://github.com/arkworks-rs
