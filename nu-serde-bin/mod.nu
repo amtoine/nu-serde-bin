@@ -48,13 +48,23 @@ def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: in
 }
 
 def "serialize vec" [size: int]: [ list<binary> -> record<ser: binary, err: record> ] {
-    for el in $in {
-        if ($el | bytes length) != $size {
+    if ($in | describe) != "list<binary>" {
+        return {
+            ser: null,
+            err: {
+                msg: $"(ansi red_bold)ser_vec::invalid_value(ansi reset)",
+                help: $"expected a (ansi cyan)list<binary>(ansi reset), found (ansi yellow)($in | describe)(ansi reset)",
+            },
+        }
+    }
+
+    for el in ($in | enumerate) {
+        if ($el.item | bytes length) != $size {
             return {
                 ser: null,
                 err: {
-                    msg: $"(ansi red_bold)ser_vec::invalid_binary(ansi reset)",
-                    help: $"aie",
+                    msg: $"(ansi red_bold)ser_vec::invalid_value(ansi reset)",
+                    help: $"expected all items to be (ansi cyan)($size)(ansi reset) bytes long, found (ansi yellow)($el.item | bytes length)(ansi reset) bytes at index (ansi purple)($el.index)(ansi reset)",
                 },
             }
         }
@@ -299,15 +309,16 @@ export def "serialize" [schema]: [ any -> binary ] {
                 }
             },
             "record" => {
+                let res = $schema | items { |k, v| $data | get $k | aux $v }
+
+                for row in $res {
+                    if $row.err? != null and $row.err != {} {
+                        return $row
+                    }
+                }
+
                 {
-                    ser: ($schema | items { |k, v|
-                        let res = $data | get $k | aux $v
-                        if $res.err != {} {
-                            return $res
-                        }
-                        $res.ser
-                    } | bytes build ...$in
-                    ),
+                    ser: ($res.ser | bytes build ...$in),
                     err: {},
                 }
             },
