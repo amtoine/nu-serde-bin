@@ -2,7 +2,14 @@ use std repeat
 
 def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: record> ] {
     if ($in | bytes length) < $size {
-        return { deser: null, n: null, err: { msg: "deser int: invalid binary" } }
+        return {
+            deser: null,
+            n: null,
+            err: {
+                msg: $"(ansi red_bold)deser_int::invalid_binary(ansi reset)",
+                help: $"expected at least (ansi cyan)($size)(ansi reset) bytes, found (ansi yellow)($in | bytes length)(ansi reset): (ansi purple)($in)(ansi reset)",
+            },
+        }
     }
 
     { deser: ($in | first $size | into int), n: $size, err: {} }
@@ -26,7 +33,14 @@ def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: in
     let elements = $in | bytes at 8..
 
     if ($elements | bytes length) < ($nb_elements * $size) {
-        return { deser: null, n: null, err: { msg: "deser vec: invalid binary" } }
+        return {
+            deser: null,
+            n: null,
+            err: {
+                msg: $"(ansi red_bold)deser_vec::invalid_binary(ansi reset)",
+                help: $"expected at least (ansi cyan)($nb_elements * $size)(ansi reset) bytes, found (ansi yellow)($elements | bytes length)(ansi reset): (ansi purple)($elements)(ansi reset)",
+            },
+        }
     }
 
     {
@@ -111,8 +125,44 @@ export def "deserialize" [schema]: [ binary -> any ] {
                 let s = $s | update size { $in / 8 }
 
                 match $s.type {
-                    "vec" => { return ($bin | skip $offset | deserialize vec $s.size) },
-                    "int" => { return ($bin | skip $offset | deserialize int $s.size) },
+                    "vec" => {
+                        let res = $bin | skip $offset | deserialize vec $s.size
+                        print "test"
+                        print ($res | te)
+                        if $res.err != {} {
+                            print "err"
+                            let foo = (
+                                $res | upsert err.label.text { |it|
+                                    $it.err.label?.text?
+                                        | default ""
+                                        | $in + $"error at byte (ansi red)($offset)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                }
+                            )
+                            print "ok"
+                            print $foo
+                            return $foo
+                        }
+                        return $res
+                    },
+                    "int" => {
+                        let res = $bin | skip $offset | deserialize int $s.size
+                        print "test"
+                        print ($res | te)
+                        if $res.err != {} {
+                            print "err"
+                            let foo = (
+                                $res | upsert err.label.text { |it|
+                                    $it.err.label?.text?
+                                        | default ""
+                                        | $in + $"error at byte (ansi red)($offset)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                }
+                            )
+                            print "ok"
+                            print $foo
+                            return $foo
+                        }
+                        return $res
+                    },
                     $t => {
                         return {
                             deser: null,
@@ -171,13 +221,21 @@ export def "deserialize" [schema]: [ binary -> any ] {
     }
 
     let res = $in | aux $schema 0
+    let span = (metadata $in).span
     print $res
     if $res.err != {} {
-        print $res.n
-        if $res.n == 0 {
-            error make ($res.err | update label.span (metadata $schema).span)
+        print $"n: ($res.n)"
+        print ($res.err | te)
+        let err = if $res.n == 0 {
+            $res.err | update label.span (metadata $schema).span
         } else {
-            error make $res.err
+            $res.err
+        }
+
+        if $err.label.span? == null {
+            error make ($err | insert label.span $span)
+        } else {
+            error make $err
         }
     }
     $res.deser
