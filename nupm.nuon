@@ -1,0 +1,10 @@
+{
+    name: "nu-serde-bin"
+    version: 1.0.0
+    description: "Helpers to serialize and deserialize binary data."
+    documentation: "https://github.com/amtoine/nu-serde-bin/blob/main/README.md"
+    maintainers: [ @amtoine ]
+    license: "https://github.com/amtoine/nu-serde-bin/blob/main/LICENSE"
+    dependencies: { nushell: 0.96.0 }
+    type: "module"
+}
