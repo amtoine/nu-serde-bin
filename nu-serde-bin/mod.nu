@@ -1,16 +1,16 @@
 use std repeat
 
-def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int> ] {
+def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: string> ] {
     if $size mod 8 != 0 {
-        error make --unspanned { msg: "deser int: invalid size" }
+        return { deser: null, n: null, err: "deser int: invalid size" }
     }
     let nb_bytes = $size / 8
 
     if ($in | bytes length) < $nb_bytes {
-        error make --unspanned { msg: "deser int: invalid binary" }
+        return { deser: null, n: null, err: "deser int: invalid binary" }
     }
 
-    { deser: ($in | first $nb_bytes | into int), n: $nb_bytes }
+    { deser: ($in | first $nb_bytes | into int), n: $nb_bytes, err: "" }
 }
 
 def "serialize int" [size: int]: [ int -> binary ] {
@@ -22,17 +22,21 @@ def "serialize int" [size: int]: [ int -> binary ] {
     $in | into binary --compact | bytes add --end (0x[00] | repeat $nb_bytes | bytes build ...$in) | bytes at ..<$nb_bytes
 }
 
-def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int> ] {
+def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int, err: string> ] {
     if $size mod 8 != 0 {
-        error make --unspanned { msg: "deser vec: invalid size" }
+        return { deser: null, n: null, err: "deser vec: invalid size" }
     }
     let nb_bytes_per_element = $size / 8
 
-    let nb_elements = $in | bytes at ..<8 | deserialize int 64 | get deser
+    let res = $in | bytes at ..<8 | deserialize int 64
+    if $res.err != "" {
+        return { deser: null, n: null, err: $res.err }
+    }
+    let nb_elements = $res.deser
     let elements = $in | bytes at 8..
 
     if ($elements | bytes length) < ($nb_elements * $nb_bytes_per_element) {
-        error make --unspanned { msg: "deser vec: invalid binary" }
+        return { deser: null, n: null, err: "deser vec: invalid binary" }
     }
 
     {
@@ -40,6 +44,7 @@ def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: in
             $elements | bytes at ($i * $nb_bytes_per_element)..<(($i + 1) * $nb_bytes_per_element)
         }),
         n: (8 + $nb_elements * $nb_bytes_per_element),
+        err: "",
     }
 }
 
@@ -112,14 +117,17 @@ export def "deserialize" [schema]: [ binary -> any ] {
                     let curr = $_schema | get $it.0
 
                     let res = $bin | aux $curr.v $it.1
-
-                    let deser = $it.2 | merge { $curr.k: $res.deser }
-                    let offset = $it.1 + $res.n
-
-                    if $it.0 == ($_schema | length) - 1 {
-                        { out: { deser: $deser, n: $offset } }
+                    if $res.err != "" {
+                        { out: { deser: null, n: null, err: $res.err } }
                     } else {
-                        { next: [ ($it.0 + 1), $offset, $deser ] }
+                        let deser = $it.2 | merge { $curr.k: $res.deser }
+                        let offset = $it.1 + $res.n
+
+                        if $it.0 == ($_schema | length) - 1 {
+                            { out: { deser: $deser, n: $offset, err: "" } }
+                        } else {
+                            { next: [ ($it.0 + 1), $offset, $deser ] }
+                        }
                     }
                 } [0, $offset, {}]
 
@@ -138,7 +146,11 @@ export def "deserialize" [schema]: [ binary -> any ] {
         }
     }
 
-    $in | aux $schema 0 | get deser
+    let res = $in | aux $schema 0
+    if $res.err != "" {
+        error make --unspanned { msg: $res.err }
+    }
+    $res.deser
 }
 
 export def "serialize" [schema]: [ any -> binary ] {
