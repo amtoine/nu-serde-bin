@@ -285,7 +285,7 @@ export def "serialize" [schema]: [ any -> binary ] {
                         if $res.err != {} {
                             return (
                                 $res | insert err.label {
-                                    text: $"woopsie",
+                                    text: $"some error",
                                     span: (metadata $schema).span,
                                 }
                             )
