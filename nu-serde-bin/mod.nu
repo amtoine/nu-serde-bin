@@ -210,7 +210,11 @@ export def "deserialize" [schema]: [ binary -> any ] {
     let span = (metadata $in).span
     if $res.err != {} {
         let err = if $res.n == 0 {
-            $res.err | update label.span (metadata $schema).span
+            if $res.err.label.span? != null {
+                $res.err | update label.span (metadata $schema).span
+            } else {
+                $res.err
+            }
         } else {
             $res.err
         }
