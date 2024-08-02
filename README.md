@@ -11,6 +11,9 @@ This module then exports two commands:
 - `serialize`: takes in some Nushell value and a _schema_ and outputs binary data. It is the inverse
   of `deserialize`.
 
+## Installation
+The recommended way is to use [Nupm](https://github.com/nushell/nupm).
+
 ## Valid binary formats
 
 `nu-serde-bin` currently supports three kinds of binary data and their associated Nushell values:
