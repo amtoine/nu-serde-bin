@@ -30,8 +30,8 @@ jobs:
         with:
           version: 0.96.0
 
-      - name: Show Nushell Version
-        run: version
+      # - name: Show Nushell Version
+      #   run: version
 
       - name: Run the tests
         run: nu --commands $"use ($env.PWD)/nupm/; nupm test"
