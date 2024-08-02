@@ -4,7 +4,7 @@ def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: r
     if ($in | bytes length) < $size {
         return {
             deser: null,
-            n: null,
+            n: 0,
             err: {
                 msg: $"(ansi red_bold)deser_int::invalid_binary(ansi reset)",
                 help: $"expected at least (ansi cyan)($size)(ansi reset) bytes, found (ansi yellow)($in | bytes length)(ansi reset): (ansi purple)($in)(ansi reset)",
@@ -129,10 +129,9 @@ export def "deserialize" [schema]: [ binary -> any ] {
                         let res = $bin | skip $offset | deserialize vec $s.size
                         if $res.err != {} {
                             return (
-                                $res | upsert err.label.text { |it|
-                                    $it.err.label?.text?
-                                        | default ""
-                                        | $in + $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                $res | insert err.label {
+                                    text: $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary",
+                                    span: (metadata $schema).span,
                                 }
                             )
                         }
@@ -142,10 +141,9 @@ export def "deserialize" [schema]: [ binary -> any ] {
                         let res = $bin | skip $offset | deserialize int $s.size
                         if $res.err != {} {
                             return (
-                                $res | upsert err.label.text { |it|
-                                    $it.err.label?.text?
-                                        | default ""
-                                        | $in + $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                $res | insert err.label {
+                                    text: $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                    span: (metadata $schema).span,
                                 }
                             )
                         }
@@ -207,27 +205,15 @@ export def "deserialize" [schema]: [ binary -> any ] {
     }
 
     let res = $in | aux $schema 0
-    let input_span = (metadata $in).span
     if $res.err != {} {
-        # NOTE: when the call is not recursive, i.e. n == 0, it appears the span is not correct and
-        # needs to be corrected
-        let err = if $res.n == 0 {
-            # NOTE: the span might already be defined, don't force it
-            if $res.err.label.span? != null {
-                $res.err | update label.span (metadata $schema).span
-            } else {
-                $res.err
-            }
+        # NOTE: sometimes the span is just messed up...
+        let err = if ($res.err.label.span | view span $in.start $in.end | $in == '$schema') {
+            $res.err | update label.span (metadata $schema).span
         } else {
             $res.err
         }
 
-        # NOTE: if there is no span, the best is to point at the input data
-        if $err.label.span? == null {
-            error make ($err | insert label.span $input_span)
-        } else {
-            error make $err
-        }
+        error make $err
     }
     $res.deser
 }
