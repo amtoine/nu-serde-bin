@@ -35,7 +35,7 @@ def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: in
     if ($elements | bytes length) < ($nb_elements * $size) {
         return {
             deser: null,
-            n: null,
+            n: 8,
             err: {
                 msg: $"(ansi red_bold)deser_vec::invalid_binary(ansi reset)",
                 help: $"expected at least (ansi cyan)($nb_elements * $size)(ansi reset) bytes, found (ansi yellow)($elements | bytes length)(ansi reset): (ansi purple)($elements)(ansi reset)",
@@ -132,7 +132,7 @@ export def "deserialize" [schema]: [ binary -> any ] {
                                 $res | upsert err.label.text { |it|
                                     $it.err.label?.text?
                                         | default ""
-                                        | $in + $"error at byte (ansi red)($offset)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                        | $in + $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
                                 }
                             )
                         }
@@ -145,7 +145,7 @@ export def "deserialize" [schema]: [ binary -> any ] {
                                 $res | upsert err.label.text { |it|
                                     $it.err.label?.text?
                                         | default ""
-                                        | $in + $"error at byte (ansi red)($offset)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                        | $in + $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
                                 }
                             )
                         }
