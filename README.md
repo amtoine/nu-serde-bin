@@ -111,7 +111,7 @@ Below is a non-exhaustive list of Rust libraries that should be supported by `nu
 
 
 ## TODO
-- [ ] polish serialization error messages
+- [x] polish serialization error messages
 - [ ] add documentation
 
 [`bincode`]: https://docs.rs/bincode/latest/bincode/
