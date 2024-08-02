@@ -127,39 +127,27 @@ export def "deserialize" [schema]: [ binary -> any ] {
                 match $s.type {
                     "vec" => {
                         let res = $bin | skip $offset | deserialize vec $s.size
-                        print "test"
-                        print ($res | te)
                         if $res.err != {} {
-                            print "err"
-                            let foo = (
+                            return (
                                 $res | upsert err.label.text { |it|
                                     $it.err.label?.text?
                                         | default ""
                                         | $in + $"error at byte (ansi red)($offset)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
                                 }
                             )
-                            print "ok"
-                            print $foo
-                            return $foo
                         }
                         return $res
                     },
                     "int" => {
                         let res = $bin | skip $offset | deserialize int $s.size
-                        print "test"
-                        print ($res | te)
                         if $res.err != {} {
-                            print "err"
-                            let foo = (
+                            return (
                                 $res | upsert err.label.text { |it|
                                     $it.err.label?.text?
                                         | default ""
                                         | $in + $"error at byte (ansi red)($offset)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
                                 }
                             )
-                            print "ok"
-                            print $foo
-                            return $foo
                         }
                         return $res
                     },
@@ -186,8 +174,6 @@ export def "deserialize" [schema]: [ binary -> any ] {
 
                     let res = $bin | aux $curr.v $it.1
                     if $res.err != {} {
-                        $res.err | table --expand | print
-                        print $it.1
                         { out: { deser: null, n: $it.1, err: $res.err } }
                     } else {
                         let deser = $it.2 | merge { $curr.k: $res.deser }
@@ -222,10 +208,7 @@ export def "deserialize" [schema]: [ binary -> any ] {
 
     let res = $in | aux $schema 0
     let span = (metadata $in).span
-    print $res
     if $res.err != {} {
-        print $"n: ($res.n)"
-        print ($res.err | te)
         let err = if $res.n == 0 {
             $res.err | update label.span (metadata $schema).span
         } else {
