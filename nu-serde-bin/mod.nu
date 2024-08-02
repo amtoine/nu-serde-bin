@@ -1,16 +1,11 @@
 use std repeat
 
-def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: string> ] {
-    if $size mod 8 != 0 {
-        return { deser: null, n: null, err: "deser int: invalid size" }
-    }
-    let nb_bytes = $size / 8
-
-    if ($in | bytes length) < $nb_bytes {
-        return { deser: null, n: null, err: "deser int: invalid binary" }
+def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: record> ] {
+    if ($in | bytes length) < $size {
+        return { deser: null, n: null, err: { msg: "deser int: invalid binary" } }
     }
 
-    { deser: ($in | first $nb_bytes | into int), n: $nb_bytes, err: "" }
+    { deser: ($in | first $size | into int), n: $size, err: {} }
 }
 
 def "serialize int" [size: int]: [ int -> binary ] {
@@ -22,29 +17,24 @@ def "serialize int" [size: int]: [ int -> binary ] {
     $in | into binary --compact | bytes add --end (0x[00] | repeat $nb_bytes | bytes build ...$in) | bytes at ..<$nb_bytes
 }
 
-def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int, err: string> ] {
-    if $size mod 8 != 0 {
-        return { deser: null, n: null, err: "deser vec: invalid size" }
-    }
-    let nb_bytes_per_element = $size / 8
-
-    let res = $in | bytes at ..<8 | deserialize int 64
-    if $res.err != "" {
+def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int, err: record> ] {
+    let res = $in | bytes at ..<8 | deserialize int 8
+    if $res.err != {} {
         return { deser: null, n: null, err: $res.err }
     }
     let nb_elements = $res.deser
     let elements = $in | bytes at 8..
 
-    if ($elements | bytes length) < ($nb_elements * $nb_bytes_per_element) {
-        return { deser: null, n: null, err: "deser vec: invalid binary" }
+    if ($elements | bytes length) < ($nb_elements * $size) {
+        return { deser: null, n: null, err: { msg: "deser vec: invalid binary" } }
     }
 
     {
         deser: (0..<$nb_elements | each { |i|
-            $elements | bytes at ($i * $nb_bytes_per_element)..<(($i + 1) * $nb_bytes_per_element)
+            $elements | bytes at ($i * $size)..<(($i + 1) * $size)
         }),
-        n: (8 + $nb_elements * $nb_bytes_per_element),
-        err: "",
+        n: (8 + $nb_elements * $size),
+        err: {},
     }
 }
 
@@ -66,47 +56,75 @@ def "serialize vec" [size: int]: [ list<binary> -> binary ] {
 }
 
 export def "deserialize" [schema]: [ binary -> any ] {
-    def aux [schema, offset: int = 0]: [ binary -> record<deser: any, n: int> ] {
+    def aux [schema, offset: int = 0]: [ binary -> record<deser: any, n: int, err: record> ] {
         let bin = $in
 
         match ($schema | describe | str replace --regex '<.*' '') {
             "string" => {
                 let s = $schema | parse "{type}:{size}" | into record
                 if $s == {} {
-                    error make {
-                        msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                        label: {
-                            text: "schema is malformed",
-                            span: (metadata $schema).span,
+                    return {
+                        deser: null,
+                        n: $offset,
+                        err: {
+                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            label: {
+                                text: "schema is malformed",
+                                span: (metadata $schema).span,
+                            },
+                            help: $"expected format to be (ansi cyan){type}:{size}(ansi reset), found (ansi yellow)($schema)(ansi reset)"
                         },
-                        help: $"expected format to be (ansi cyan){type}:{size}(ansi reset), found (ansi yellow)($schema)(ansi reset)"
                     }
                 }
 
                 let s = try {
                     $s | into int size
                 } catch {
-                    error make {
-                        msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                        label: {
-                            text: "schema is malformed",
-                            span: (metadata $schema).span,
+                    return {
+                        deser: null,
+                        n: $offset,
+                        err: {
+                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            label: {
+                                text: "schema is malformed",
+                                span: (metadata $schema).span,
+                            },
+                            help: $"expected (ansi cyan)size(ansi reset) in format (ansi cyan){type}:{size}(ansi reset) to be an (ansi purple)int(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
                         },
-                        help: $"expected (ansi cyan)size(ansi reset) in format (ansi cyan){type}:{size}(ansi reset) to be an (ansi purple)int(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
                     }
                 }
+
+                if $s.size mod 8 != 0 {
+                    return {
+                        deser: null,
+                        n: $offset,
+                        err: {
+                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            label: {
+                                text: "schema is malformed",
+                                span: (metadata $schema).span,
+                            },
+                            help: $"expected (ansi cyan)size(ansi reset) to be a multiple of (ansi purple)8(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                        },
+                    }
+                }
+                let s = $s | update size { $in / 8 }
 
                 match $s.type {
                     "vec" => { return ($bin | skip $offset | deserialize vec $s.size) },
                     "int" => { return ($bin | skip $offset | deserialize int $s.size) },
                     $t => {
-                        error make {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                            label: {
-                                text: "invalid schema type",
-                                span: (metadata $schema).span,
+                        return {
+                            deser: null,
+                            n: $offset,
+                            err: {
+                                msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                                label: {
+                                    text: "invalid schema type",
+                                    span: (metadata $schema).span,
+                                },
+                                help: $"expected one of (ansi cyan)['vec', 'int'](ansi reset), found (ansi yellow)($t)(ansi reset)"
                             },
-                            help: $"expected one of (ansi cyan)['vec', 'int'](ansi reset), found (ansi yellow)($t)(ansi reset)"
                         }
                     },
                 }
@@ -117,14 +135,16 @@ export def "deserialize" [schema]: [ binary -> any ] {
                     let curr = $_schema | get $it.0
 
                     let res = $bin | aux $curr.v $it.1
-                    if $res.err != "" {
-                        { out: { deser: null, n: null, err: $res.err } }
+                    if $res.err != {} {
+                        $res.err | table --expand | print
+                        print $it.1
+                        { out: { deser: null, n: $it.1, err: $res.err } }
                     } else {
                         let deser = $it.2 | merge { $curr.k: $res.deser }
                         let offset = $it.1 + $res.n
 
                         if $it.0 == ($_schema | length) - 1 {
-                            { out: { deser: $deser, n: $offset, err: "" } }
+                            { out: { deser: $deser, n: $offset, err: {} } }
                         } else {
                             { next: [ ($it.0 + 1), $offset, $deser ] }
                         }
@@ -134,21 +154,31 @@ export def "deserialize" [schema]: [ binary -> any ] {
                 $res | into record
             },
             $t => {
-                error make {
-                    msg: $"(ansi red_bold)invalid_schema(ansi reset)",
-                    label: {
-                        text: "invalid serde schema",
-                        span: (metadata $schema).span,
+                return {
+                    deser: null,
+                    n: $offset,
+                    err: {
+                        msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                        label: {
+                            text: "invalid serde schema",
+                            span: (metadata $schema).span,
+                        },
+                        help: $"type is (ansi purple)($t)(ansi reset), expected one of (ansi cyan)['string', 'record'](ansi reset)"
                     },
-                    help: $"type is (ansi purple)($t)(ansi reset)"
                 }
             }
         }
     }
 
     let res = $in | aux $schema 0
-    if $res.err != "" {
-        error make --unspanned { msg: $res.err }
+    print $res
+    if $res.err != {} {
+        print $res.n
+        if $res.n == 0 {
+            error make ($res.err | update label.span (metadata $schema).span)
+        } else {
+            error make $res.err
+        }
     }
     $res.deser
 }
