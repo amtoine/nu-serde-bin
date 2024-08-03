@@ -35,4 +35,4 @@ jobs:
       - name: Run the tests
         run: |
           "$env.NU_LIB_DIRS = [ (${{ steps.nu-setup.outputs.nupm_path }} | path dirname) ]" | save --force /tmp/env.nu
-          nu --env-config /tmp/env.nu --commands "nupm test"
+          nu --env-config /tmp/env.nu --commands "use nupm; nupm test"
