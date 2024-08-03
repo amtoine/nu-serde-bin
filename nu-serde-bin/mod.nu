@@ -168,7 +168,7 @@ export def "deserialize" [schema]: [ binary -> any ] {
                     }
                 }
 
-                if $s.size mod 8 != 0 {
+                if $s.size <= 0 {
                     return {
                         deser: null,
                         n: $offset,
@@ -179,13 +179,12 @@ export def "deserialize" [schema]: [ binary -> any ] {
                                 span: (metadata $schema).span,
                             },
                             help: (
-                                $"expected ('size' | color cyan) to be a multiple of " +
-                                $"('8' | color purple), found ($s.size | color yellow)"
+                                $"expected ('size' | color cyan) to be strictly positive " +
+                                $", found ($s.size | color yellow)"
                             ),
                         },
                     }
                 }
-                let s = $s | update size { $in / 8 }
 
                 match $s.type {
                     "vec" => {
@@ -332,7 +331,7 @@ export def "serialize" [schema]: [ any -> binary ] {
                     }
                 }
 
-                if $s.size mod 8 != 0 {
+                if $s.size <= 0 {
                     return {
                         ser: null,
                         err: {
@@ -342,13 +341,12 @@ export def "serialize" [schema]: [ any -> binary ] {
                                 span: (metadata $schema).span,
                             },
                             help: (
-                                $"expected ('size' | color cyan) to be a multiple of ('8' | color purple), " +
-                                $"found ($s.size | color yellow)"
+                                $"expected ('size' | color cyan) to be strictly positive " +
+                                $", found ($s.size | color yellow)"
                             ),
                         },
                     }
                 }
-                let s = $s | update size { $in / 8 }
 
                 match $s.type {
                     "vec" => {
