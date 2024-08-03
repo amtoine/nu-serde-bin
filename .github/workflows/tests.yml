@@ -1,0 +1,38 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+name: continuous-integration
+
+defaults:
+  run:
+    shell: nu {0}
+
+env:
+  NU_LOG_LEVEL: DEBUG
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: true
+      matrix:
+        platform: [windows-latest, macos-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: amtoine/setup-nupm-action@0.3.0
+        id: "nu-setup"
+        with:
+          nu_version: 0.96.0
+          nupm_revision: 42d65a9
+
+      - name: Run the tests
+        run: |
+          "$env.NU_LIB_DIRS = [ (${{ steps.nu-setup.outputs.nupm_path }} | path dirname) ]" | save --force /tmp/env.nu
+          nu --env-config /tmp/env.nu --commands "use nupm; nupm test"
