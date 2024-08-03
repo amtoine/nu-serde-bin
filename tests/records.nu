@@ -3,9 +3,9 @@ use std assert
 
 export def main [] {
     const SCHEMA = {
-        a: "int:16",
-        v: "vec:8",
-        b: { a: "int:8", b: "int:24", c: "int:16" },
+        a: "int:2",
+        v: "vec:1",
+        b: { a: "int:1", b: "int:3", c: "int:2" },
     }
 
     let bin = 0x[

@@ -17,11 +17,12 @@ The recommended way is to use [Nupm](https://github.com/nushell/nupm).
 ## Valid binary formats
 
 `nu-serde-bin` currently supports three kinds of binary data and their associated Nushell values:
-- integers: the format is `int:n` where $n$ is the number of bits of the integer. $n$ could be
-  arbitrary but has to be a multiple of $8$. The associated Nushell values are `int`.
-- lists / vectors of integers: the format is `vec:n` where $n$ is the number of bits of each element
-  in the vector. All elements in the vector should have the same number of bits $n$ and $n$ could be
-  arbitrary but has to be a multiple of $8$. The associated Nushell values are `list<int>`.
+- integers: the format is `int:n` where $n$ is the number of bytes of the integer. $n$ could be
+  any strictly positive integer. The associated Nushell values are `int`.
+- lists / vectors of integers: the format is `vec:n` where $n$ is the number of bytes of each element
+  in the vector. All elements in the vector should take the same amount of bytes $n$ and $n$ could be
+  any strictly positive integer. The length of the vector is encoded with $8$ bytes, before the first
+  item of the vector. The associated Nushell values are `list<binary>`.
 - records / key-value structures: the format is `{ k1: v1, k2, v2 }` where the $k_i$ are string
   names that you can define however you like and the $v_i$ are any of the valid `nu-serde-bin`
   formats. This last format is recursive, i.e. a $v_i$ can itself be a record. The associated
@@ -33,35 +34,31 @@ The recommended way is to use [Nupm](https://github.com/nushell/nupm).
 0x[01 00] | deserialize "not-a:format"
 ```
 
-```nushell
-123 | serialize "int:15"
-```
-
 ### invalid binary data or Nushell values
 ```nushell
-0x[01 10] | deserialize "int:32"
+0x[01 10] | deserialize "int:4"
 ```
 
 ```nushell
-assert equal (123456 | serialize "int:8") 0x[40] # instead of `0x[40 e2 01 00]`
+assert equal (123456 | serialize "int:1") 0x[40] # instead of `0x[40 e2 01 00]`
 ```
 
 #### integers
 ```nushell
-assert equal (0x[01 10] | deserialize "int:16") 4097
+assert equal (0x[01 10] | deserialize "int:2") 4097
 ```
 
 ```nushell
-assert equal (123456 | serialize "int:32") 0x[40 e2 01 00]
+assert equal (123456 | serialize "int:4") 0x[40 e2 01 00]
 ```
 
 ```nushell
-assert equal (123456 | serialize "int:64") 0x[40 e2 01 00  00 00 00 00]
+assert equal (123456 | serialize "int:8") 0x[40 e2 01 00  00 00 00 00]
 ```
 
 ### vectors
 ```nushell
-let actual = 0x[03 00 00 00  00 00 00 00  00 01 02] | deserialize "vec:8"
+let actual = 0x[03 00 00 00  00 00 00 00  00 01 02] | deserialize "vec:1"
 #               \______________________/  \______/
 #                        length             items
 let expected = [0x[00], 0x[01], 0x[02]]
@@ -70,7 +67,7 @@ assert equal $actual $expected
 ```
 
 ```nushell
-let actual = [0x[01 00], 0x[02, 00], 0x[03, 00], 0x[04, 00]] | serialize "vec:16"
+let actual = [0x[01 00], 0x[02, 00], 0x[03, 00], 0x[04, 00]] | serialize "vec:2"
 let expected = 0x[04 00 00 00  00 00 00 00  01 00 02 00  03 00 04 00]
 
 assert equal $actual $expected
@@ -79,9 +76,9 @@ assert equal $actual $expected
 ### records
 ```nushell
 const SCHEMA = {
-    a: "int:16",
-    v: "vec:8",
-    b: { a: "int:8", b: "int:24", c: "int:16" },
+    a: "int:2",
+    v: "vec:1",
+    b: { a: "int:1", b: "int:3", c: "int:2" },
 }
 
 let bin = 0x[
