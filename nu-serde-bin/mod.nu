@@ -380,6 +380,40 @@ export def "serialize" [schema]: [ any -> binary ] {
                 }
             },
             "record" => {
+                match ($data | describe | str replace --regex '<.*' '') {
+                    "record" => {
+                        if ($schema | columns | sort) != ($data | columns | sort) {
+                            return {
+                                ser: null,
+                                err: {
+                                    msg: $"('invalid_value' | color red_bold)",
+                                    label: {
+                                        text: "invalid input value",
+                                        span: (metadata $schema).span,
+                                    },
+                                    help: (
+                                        $"expected input ('record' | color purple) with keys " +
+                                        $"($schema | columns | color purple), found ($data | columns | color yellow)"
+                                    ),
+                                },
+                            }
+                        }
+                    },
+                    $t => {
+                        return {
+                            ser: null,
+                            err: {
+                                msg: $"('invalid_value' | color red_bold)",
+                                label: {
+                                    text: "invalid input value",
+                                    span: (metadata $schema).span,
+                                },
+                                help: $"expected a ('record' | color purple), found ($t | color yellow)"
+                            },
+                        }
+                    }
+                }
+
                 let res = $schema | items { |k, v| $data | get $k | aux $v }
 
                 for row in $res {
@@ -412,10 +446,10 @@ export def "serialize" [schema]: [ any -> binary ] {
     let res = $in | aux $schema
     if $res.err != {} {
         # NOTE: sometimes the span is just messed up...
-        let err = if ($res.err.label.span | view span $in.start $in.end | $in == '$schema') {
-            $res.err | update label.span (metadata $schema).span
-        } else {
-            $res.err
+        let err = match ($res.err.label.span | view span $in.start $in.end) {
+            "$schema" => { $res.err | update label.span (metadata $schema).span },
+            "$v" => { $res.err | update label.span (metadata $schema).span },
+            _ => $res.err,
         }
 
         error make $err
