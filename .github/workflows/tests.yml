@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - uses: amtoine/setup-nupm-action@0.3.0
+        id: "nu-setup"
         with:
           nu_version: 0.96.0
           nupm_revision: 42d65a9
@@ -35,4 +36,6 @@ jobs:
       #   run: version
 
       - name: Run the tests
-        run: nu --commands "use nupm; nupm test"
+        run: |
+          "$env.NU_LIB_DIRS = [ (${{ steps.nu-setup.outputs.nupm_path }} | path dirname) ]" | save --force /tmp/env.nu
+          nu --env-config /tmp/env.nu --commands "nupm test"
