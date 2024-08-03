@@ -32,9 +32,6 @@ jobs:
           nu_version: 0.96.0
           nupm_revision: 42d65a9
 
-      # - name: Show Nushell Version
-      #   run: version
-
       - name: Run the tests
         run: |
           "$env.NU_LIB_DIRS = [ (${{ steps.nu-setup.outputs.nupm_path }} | path dirname) ]" | save --force /tmp/env.nu
