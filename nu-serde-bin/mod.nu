@@ -1,13 +1,50 @@
 use std repeat
 
+def color [c: string, --next: string = "reset"]: [ any -> string ] {
+    $"(ansi $c)($in)(ansi reset)(ansi $next)"
+}
+
+def hex []: [ binary -> string ] {
+    let bin = $in
+    $bin | bytes length | seq 0 ($in - 1) | reduce --fold "0x" { |it, acc|
+        let byte = $bin
+            | bytes at $it..$it
+            | into int
+            | fmt
+            | get lowerhex
+            | str replace "0x" ''
+            | fill --alignment "right" --width 2 --character '0'
+        $acc + $byte
+    }
+}
+
+def bin-context [o: int]: [ binary -> string ] {
+    let bin = $in
+
+    let context = [
+        (if ($o > 0) {
+            ($bin | bytes at ([0, ($o - 3)] | math max)..($o - 1) | hex | color yellow)
+        }),
+        ($bin | bytes at $o..$o | hex | color green_underline),
+        (if ($bin | bytes length | $o < $in - 1) {
+            ($bin | bytes at ($o + 1)..($o + 3) | hex | color cyan)
+        }),
+    ]
+
+    $context | compact | str join ' '
+}
+
 def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: record> ] {
     if ($in | bytes length) < $size {
         return {
             deser: null,
             n: 0,
             err: {
-                msg: $"(ansi red_bold)deser_int::invalid_binary(ansi reset)",
-                help: $"expected at least (ansi cyan)($size)(ansi reset) bytes, found (ansi yellow)($in | bytes length)(ansi reset): (ansi purple)($in)(ansi reset)",
+                msg: ("deser_int::invalid_binary" | color red_bold),
+                help: (
+                    $"expected at least ($size | color cyan) bytes, found " +
+                    $"($in | bytes length | color yellow): ($in | hex | color purple)"
+                ),
             },
         }
     }
@@ -16,7 +53,9 @@ def "deserialize int" [size: int]: [ binary -> record<deser: int, n: int, err: r
 }
 
 def "serialize int" [size: int]: [ int -> binary ] {
-    $in | into binary --compact | bytes add --end (0x[00] | repeat $size | bytes build ...$in) | bytes at ..<$size
+    into binary --compact
+        | bytes add --end (0x[00] | repeat $size | bytes build ...$in)
+        | bytes at ..<$size
 }
 
 def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: int, err: record> ] {
@@ -32,8 +71,11 @@ def "deserialize vec" [size: int]: [ binary -> record<deser: list<binary>, n: in
             deser: null,
             n: 8,
             err: {
-                msg: $"(ansi red_bold)deser_vec::invalid_binary(ansi reset)",
-                help: $"expected at least (ansi cyan)($nb_elements * $size)(ansi reset) bytes, found (ansi yellow)($elements | bytes length)(ansi reset): (ansi purple)($elements)(ansi reset)",
+                msg: ("deser_vec::invalid_binary" | color red_bold),
+                help: (
+                    $"expected at least ($nb_elements * $size | color cyan) bytes, found " +
+                    $"($elements | bytes length | color yellow): ($elements | hex | color purple)"
+                ),
             },
         }
     }
@@ -52,8 +94,8 @@ def "serialize vec" [size: int]: [ list<binary> -> record<ser: binary, err: reco
         return {
             ser: null,
             err: {
-                msg: $"(ansi red_bold)ser_vec::invalid_value(ansi reset)",
-                help: $"expected a (ansi cyan)list<binary>(ansi reset), found (ansi yellow)($in | describe)(ansi reset)",
+                msg: ("ser_vec::invalid_binary" | color red_bold),
+                help: $"expected a ('list<binary>' | color cyan), found ($in | describe | color yellow)",
             },
         }
     }
@@ -63,8 +105,11 @@ def "serialize vec" [size: int]: [ list<binary> -> record<ser: binary, err: reco
             return {
                 ser: null,
                 err: {
-                    msg: $"(ansi red_bold)ser_vec::invalid_value(ansi reset)",
-                    help: $"expected all items to be (ansi cyan)($size)(ansi reset) bytes long, found (ansi yellow)($el.item | bytes length)(ansi reset) bytes at index (ansi purple)($el.index)(ansi reset)",
+                    msg: ("ser_vec::invalid_value" | color red_bold),
+                    help: (
+                        $"expected all items to be ($size | color cyan) bytes long, found " +
+                        $"($el.item | bytes length | color yellow) bytes at index ($el.index | color purple)"
+                    ),
                 },
             }
         }
@@ -90,12 +135,15 @@ export def "deserialize" [schema]: [ binary -> any ] {
                         deser: null,
                         n: $offset,
                         err: {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            msg: ("invalid_schema" | color red_bold),
                             label: {
                                 text: "schema is malformed",
                                 span: (metadata $schema).span,
                             },
-                            help: $"expected format to be (ansi cyan){type}:{size}(ansi reset), found (ansi yellow)($schema)(ansi reset)"
+                            help: (
+                                $"expected format to be ('{type}:{size}' | color cyan), found " +
+                                ($schema | color yellow)
+                            ),
                         },
                     }
                 }
@@ -107,12 +155,15 @@ export def "deserialize" [schema]: [ binary -> any ] {
                         deser: null,
                         n: $offset,
                         err: {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            msg: ("invalid_schema" | color red_bold),
                             label: {
                                 text: "schema is malformed",
                                 span: (metadata $schema).span,
                             },
-                            help: $"expected (ansi cyan)size(ansi reset) in format (ansi cyan){type}:{size}(ansi reset) to be an (ansi purple)int(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                            help: (
+                                $"expected ('size' | color cyan) in format ('{type}:{size}' | color cyan) " +
+                                $"to be an ('int' | color purple), found ($s.size | color yellow)"
+                            ),
                         },
                     }
                 }
@@ -122,12 +173,15 @@ export def "deserialize" [schema]: [ binary -> any ] {
                         deser: null,
                         n: $offset,
                         err: {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            msg: ("invalid_schema" | color red_bold),
                             label: {
                                 text: "schema is malformed",
                                 span: (metadata $schema).span,
                             },
-                            help: $"expected (ansi cyan)size(ansi reset) to be a multiple of (ansi purple)8(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                            help: (
+                                $"expected ('size' | color cyan) to be a multiple of " +
+                                $"('8' | color purple), found ($s.size | color yellow)"
+                            ),
                         },
                     }
                 }
@@ -137,9 +191,13 @@ export def "deserialize" [schema]: [ binary -> any ] {
                     "vec" => {
                         let res = $bin | skip $offset | deserialize vec $s.size
                         if $res.err != {} {
+                            let o = $offset + $res.n
                             return (
                                 $res | insert err.label {
-                                    text: $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary",
+                                    text: (
+                                        $"error at byte ($o | color green_underline --next purple) in input binary\n" +
+                                        $"context: ($bin | bin-context $o)"
+                                    ),
                                     span: (metadata $schema).span,
                                 }
                             )
@@ -149,9 +207,13 @@ export def "deserialize" [schema]: [ binary -> any ] {
                     "int" => {
                         let res = $bin | skip $offset | deserialize int $s.size
                         if $res.err != {} {
+                            let o = $offset + $res.n
                             return (
                                 $res | insert err.label {
-                                    text: $"error at byte (ansi red)($offset + $res.n)(ansi purple) ($bin | bytes at ($offset)..($offset)) in input binary"
+                                    text: (
+                                        $"error at byte ($o | color green_underline --next purple) in input binary\n" +
+                                        $"context: ($bin | bin-context $o)"
+                                    ),
                                     span: (metadata $schema).span,
                                 }
                             )
@@ -163,12 +225,12 @@ export def "deserialize" [schema]: [ binary -> any ] {
                             deser: null,
                             n: $offset,
                             err: {
-                                msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                                msg: ("invalid_schema" | color red_bold),
                                 label: {
                                     text: "invalid schema type",
                                     span: (metadata $schema).span,
                                 },
-                                help: $"expected one of (ansi cyan)['vec', 'int'](ansi reset), found (ansi yellow)($t)(ansi reset)"
+                                help: $"expected one of (['vec', 'int'] | color cyan), found ($t | color yellow)"
                             },
                         }
                     },
@@ -201,12 +263,12 @@ export def "deserialize" [schema]: [ binary -> any ] {
                     deser: null,
                     n: $offset,
                     err: {
-                        msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                        msg: ("invalid_schema" | color red_bold),
                         label: {
                             text: "invalid serde schema",
                             span: (metadata $schema).span,
                         },
-                        help: $"type is (ansi purple)($t)(ansi reset), expected one of (ansi cyan)['string', 'record'](ansi reset)"
+                        help: $"type is ($t | color purple), expected one of (['string', 'record'] | color cyan)"
                     },
                 }
             }
@@ -238,12 +300,15 @@ export def "serialize" [schema]: [ any -> binary ] {
                     return {
                         ser: null,
                         err: {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            msg: ("invalid_schema" | color red_bold),
                             label: {
                                 text: "schema is malformed",
                                 span: (metadata $schema).span,
                             },
-                            help: $"expected format to be (ansi cyan){type}:{size}(ansi reset), found (ansi yellow)($schema)(ansi reset)"
+                            help: (
+                                $"expected format to be ('{type}:{size}' | color cyan), found " +
+                                ($schema | color yellow)
+                            ),
                         },
                     }
                 }
@@ -254,12 +319,15 @@ export def "serialize" [schema]: [ any -> binary ] {
                     return {
                         ser: null,
                         err: {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            msg: $"('invalid_schema' | color red_bold)",
                             label: {
                                 text: "schema is malformed",
                                 span: (metadata $schema).span,
                             },
-                            help: $"expected (ansi cyan)size(ansi reset) in format (ansi cyan){type}:{size}(ansi reset) to be an (ansi purple)int(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                            help: (
+                                $"expected ('size' | color cyan) in format ('{type}:{size}' | color cyan) " +
+                                $"to be an ('int' | color purple), found ($s.size | color yellow)"
+                            ),
                         },
                     }
                 }
@@ -268,12 +336,15 @@ export def "serialize" [schema]: [ any -> binary ] {
                     return {
                         ser: null,
                         err: {
-                            msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                            msg: $"('invalid_schema' | color red_bold)",
                             label: {
                                 text: "schema is malformed",
                                 span: (metadata $schema).span,
                             },
-                            help: $"expected (ansi cyan)size(ansi reset) to be a multiple of (ansi purple)8(ansi reset), found (ansi yellow)($s.size)(ansi reset)"
+                            help: (
+                                $"expected ('size' | color cyan) to be a multiple of ('8' | color purple), " +
+                                $"found ($s.size | color yellow)"
+                            ),
                         },
                     }
                 }
@@ -297,12 +368,12 @@ export def "serialize" [schema]: [ any -> binary ] {
                         return {
                             ser: null,
                             err: {
-                                msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                                msg: $"('invalid_schema' | color red_bold)",
                                 label: {
                                     text: "invalid schema type",
                                     span: (metadata $schema).span,
                                 },
-                                help: $"expected one of (ansi cyan)['vec', 'int'](ansi reset), found (ansi yellow)($t)(ansi reset)"
+                                help: $"expected one of (['vec', 'int'] | color cyan), found ($t | color yellow)"
                             },
                         }
                     },
@@ -326,12 +397,12 @@ export def "serialize" [schema]: [ any -> binary ] {
                 return {
                     ser: null,
                     err: {
-                        msg: $"(ansi red_bold)invalid_schema(ansi reset)",
+                        msg: $"('invalid_schema' | color red_bold)",
                         label: {
                             text: "invalid serde schema",
                             span: (metadata $schema).span,
                         },
-                        help: $"type is (ansi purple)($t)(ansi reset), expected one of (ansi cyan)['string', 'record'](ansi reset)"
+                        help: $"type is ($t | color purple), expected one of (['string', 'record'] | color cyan)"
                     },
                 }
             }
