@@ -17,16 +17,22 @@ The recommended way is to use [Nupm](https://github.com/nushell/nupm).
 ## Valid binary formats
 
 `nu-serde-bin` currently supports three kinds of binary data and their associated Nushell values:
-- integers: the format is `int:n` where $n$ is the number of bytes of the integer. $n$ could be
-  any strictly positive integer. The associated Nushell values are `int`.
-- lists / vectors of integers: the format is `vec:n` where $n$ is the number of bytes of each element
-  in the vector. All elements in the vector should take the same amount of bytes $n$ and $n$ could be
-  any strictly positive integer. The length of the vector is encoded with $8$ bytes, before the first
-  item of the vector. The associated Nushell values are `list<binary>`.
-- records / key-value structures: the format is `{ k1: v1, k2, v2 }` where the $k_i$ are string
-  names that you can define however you like and the $v_i$ are any of the valid `nu-serde-bin`
-  formats. This last format is recursive, i.e. a $v_i$ can itself be a record. The associated
-  Nushell values are `record<>`.
+- ***integers***:
+  - the format is `int:n` where $n$ is the number of bytes of the integer
+    - $n$ could be any strictly positive integer
+  - the associated Nushell values are `int`
+- ***lists*** / ***vectors*** of integers:
+  - the format is `vec:n` where $n$ is the number of bytes of each element in the vector
+    - all elements in the vector should take the same amount of bytes $n$
+    - $n$ could be any strictly positive integer
+  - the length of the vector is encoded with $8$ bytes, before the first item of the vector
+  - the associated Nushell values are `list<binary>`
+- ***records*** / ***key-value*** structures:
+  - the format is `{ k1: v1, k2, v2 }` where
+    - the $k_i$ are string names that you can define however you like
+    - the $v_i$ are any of the valid `nu-serde-bin` formats
+  - this format is recursive, i.e. a $v_i$ can itself be a record
+  - the associated Nushell values are `record<>`
 
 ## Some examples
 #### invalid formats
